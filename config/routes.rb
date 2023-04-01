@@ -7,7 +7,7 @@ Rails.application.routes.draw do
 
   post '/users', to: 'users#register'
   post '/users/login', to: 'users#login'
-  post '/users/logout', to: 'users#logout'
+  delete '/users/logout', to: 'users#logout'
   get '/user/login/check', to: 'users#check_login_status'
 
   get '/verify', to: 'application#verify_auth'

@@ -1,40 +1,91 @@
 class ApplicationController < ActionController::API
+  include ActionController::Cookies
 
-    include ActionController::Cookies
-    # before_action :authenticate_request, except: [:register, :login]
-  
-     rescue_from StandardError, with: :standard_error
+  rescue_from StandardError, with: :standard_error
 
-    def create 
-      user = register
-      render json: user
-    end
-  
-
-    def app_response(message: 'success', status: 200, data: nil)
+  def app_response(message: 'success', status: 200, data: nil)
       render json: {
-        message: message,
-        data: data
+          message: message,
+          data: data
       }, status: status
-    end
+  end
 
-  
-    private
-
-    def authenticate_request
-      header = request.headers['Authorization']
-      token = header.split(' ').last if header
-  
+  # hash data into web token
+  def encode(uid, email)
+      payload = {
+          data: {
+              uid: uid,
+              email: email,
+              role: 'admin'
+          },
+          exp: Time.now.to_i + (6 * 3600)
+      }
       begin
-        decoded = JWT.decode(token, ENV['JWT_SECRET'], true, { algorithm: 'HS256' })
-        @current_user_id = decoded.first['user_id']
-      rescue JWT::DecodeError
-        render json: { error: 'Invalid token' }, status: :unauthorized
+          JWT.encode(payload, ENV['task_train_key'], 'HS256')
+      rescue JWT::EncodeError => e
+          app_response(message: 'failed', status: 400, data: { info: 'Something went wrong. Please try again' })
       end
-    end
+  end
 
-    def standard_error(exception)
-      app_response(message: 'failed', data: { info: exception.message }, status: 401  )
-    end
-    
+  # unhash the token
+  def decode(token)
+      begin
+          JWT.decode(token, ENV['task_train_key'], true, { algorithm: 'HS256' })
+      rescue JWT::DecodeError => e
+          app_response(message: 'failed', status: 401, data: { info: 'Your session has expired. Please login again to continue' }) 
+      end
+  end
+
+  # verify authorization headers
+  def verify_auth
+      auth_headers = request.headers['Authorization']
+      if !auth_headers
+          app_response(message: 'failed', status: 401, data: { info: 'Your request is not authorized.' }) 
+      else
+          token = auth_headers.split(' ')[1]
+          save_user_id(token)
+      end
+  end
+
+  # store user id in session
+  def save_user(id)
+      session[:uid] = id
+      session[:expiry] = 6.hours.from_now
+  end
+
+  # delete user id in session
+  def remove_user
+      session.delete(:uid)
+      session[:expiry] = Time.now
+  end
+
+  # check for session expiry
+  def session_expired?
+      session[:expiry] ||= Time.now
+      time_diff = (Time.parse(session[:expiry]) - Time.now).to_i
+      unless time_diff > 0
+          app_response(message: 'failed', status: 401, data: { info: 'Your session has expired. Please login again to continue' })
+      end
+  end
+
+  # get logged in user
+  def user
+      User.find(@uid) 
+  end
+
+  # save user's id
+  def save_user_id(token)
+      @uid = decode(token)[0]["data"]["uid"].to_i
+  end
+
+  # get logged in user (session)
+  def user_session
+      User.find(session[:uid].to_i) 
+  end
+
+  # rescue all common errors
+  def standard_error(exception)
+      app_response(message: 'failed', data: { info: exception.message }, status: :unprocessable_entity)
+  end
+
 end
