@@ -3,7 +3,8 @@ class RecipesController < ApplicationController
     rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
     # before_action :authenticate_request, only: [:create, :update, :destroy]
     
-     before_action :require_login, only: [:create, :destroy]
+    #  before_action :require_login, only: [:create, :destroy]
+
         def index
             recipes = Recipe.all
             app_response(message: 'success', status: :ok, data: ActiveModelSerializers::SerializableResource.new(recipes, each_serializer: RecipeSerializer).as_json)
@@ -54,6 +55,12 @@ class RecipesController < ApplicationController
         def recipe_params
             params.permit(:title, :instructions, :ingredients, :prep_time)
         end
+
+        # def require_login
+        #     unless logged_in?
+        #       app_response(message: 'You must be logged in to access this page', status: :unauthorized)
+        #     end
+        # end
 
         def record_not_found(exception)
             app_response(message: exception.message, status: :not_found)
